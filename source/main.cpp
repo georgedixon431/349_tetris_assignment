@@ -30,41 +30,65 @@ std::array<std::array<std::array<int, 2>, 2>, 4> data = {{
     {{{9, 9}, {0, 0}}}
 }};
 
-std::array<std::array<std::array<int, 2>, 2>*, 4> grid_pointers;
-
 void initialiseGrid()
 {
-    for (int i = 0; i < ROWS; ++i)
+    for (int x = 0; x < COLS; ++x)
     {
-        for (int j = 0; j < COLS; ++j)
+        for (int y = 0; y < ROWS; ++y)
         {
-            if (i == 6 || j == 0 || j == 6)
+            if (y == 6 || x == 0 || x == 6)
             {
-                grid[i][j] = 1;
+                grid[y][x] = 1;
             }
         }
     }
-
-    for (size_t i = 0; i < data.size(); ++i)
-    {
-        grid_pointers[i] = &data[i];
-    }
 }
 
+void removeBlock()
+{
+    grid[blockY][blockX] = 0;
+    grid[blockY][blockX + 1] = 0;
+    grid[blockY + 1][blockX] = 0;
+    grid[blockY + 1][blockX + 1] = 0;
+}
+
+void placeBlock()
+{
+    grid[blockY][blockX]         = block[0][0];
+    grid[blockY][blockX + 1]     = block[0][1];
+    grid[blockY + 1][blockX]     = block[1][0];
+    grid[blockY + 1][blockX + 1] = block[1][1];
+}
+
+void displaygrid(){
+    for (int x = 0; x < ROWS; ++x) {
+            for (int y = 0; y < COLS; ++y) {
+                if (x > 0 && y > 0 && x < 6 && y < 6){
+                uBit.display.image.setPixelValue(x - 1, y - 1, grid[y][x] * 28); //255/9 = 28.3333 else 0*28.3 = 0
+                }
+            }
+        }
+}
 
 void onButtonA(MicroBitEvent e)
 {
     if (!gameOver && blockX> 1)
     {
+        removeBlock();
         blockX--;
+        placeBlock();
+        displaygrid();
     }
 }
 
 void onButtonB(MicroBitEvent e)
 {
-    if (!gameOver && blockX < 5)
+    if (!gameOver && blockX < 4)
     {
+        removeBlock();
         blockX++;
+        placeBlock();
+        displaygrid();
     }
 }
 
@@ -76,33 +100,20 @@ void fallingblocks(){
             blockY = 0;
             blockX = microbit_random(range) + 1;
             shape = microbit_random(blocks);
-            block = (*grid_pointers[shape]);
-            grid[blockY][blockX]         = block[0][0];
-            grid[blockY][blockX + 1]     = block[0][1];
-            grid[blockY + 1][blockX]     = block[1][0];
-            grid[blockY + 1][blockX + 1] = block[1][1];
+            block = data[shape];
         }
         else{
             blockY += dy;
-            grid[blockY][blockX]         = block[0][0];
-            grid[blockY][blockX + 1]     = block[0][1];
-            grid[blockY + 1][blockX]     = block[1][0];
-            grid[blockY + 1][blockX + 1] = block[1][1];
         }
-
-        for (int i = 0; i < ROWS; ++i) {
-            for (int j = 0; j < COLS; ++j) {
-                if (i > 1 && j > 1 && i < 6 && j < 6){
-                uBit.display.image.setPixelValue(i - 1, j - 1, grid[j][i] * 28.3); //255/9 = 28.3333 else 0*28.3 = 0
-                }
+        if (blockY >= 5){
+                newblock = true;
+                continue;
             }
-        }
+
+        placeBlock();
+        displaygrid();
         uBit.sleep(fallingSpeed);
-        uBit.display.image.setPixelValue(blockY, blockX, 0);
-        uBit.display.image.setPixelValue(blockY + 1, blockX, 0);
-        uBit.display.image.setPixelValue(blockY, blockX + 1, 0);
-        uBit.display.image.setPixelValue(blockY + 1, blockX + 1, 0);
-        uBit.sleep(fallingSpeed);
+        removeBlock();
     }
 }
 
