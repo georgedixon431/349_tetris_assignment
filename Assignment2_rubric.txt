@@ -1,0 +1,50 @@
+Pass
+ * Most game play elements - game is playable
+ * code is grouped logically
+ * generally good coding style 
+ * not being a straight clone of the python code
+ * User input events
+ * Code is partially commented
+ * Minor bugs - game is playable
+
+Good
+ * Complete set of gameplay elements
+ 	* 4 block shapes (one is just a rotation)
+ 	* blocks are selected randomly
+ 	* buttons move block left and right
+ 	* press both buttons to rotate block
+ 	* movement restricted to screen
+ 	* movement restricted by other blocks 
+	* completed lines are removed
+ 	* detect losing condition
+ 	* restart game after losing
+ * Gameplay works correctly, no bugs e.g.
+	* Missing collision
+	* Incorrect collision e.g. getting stuck in walls
+	* Game ends before reaching top of screen
+	* Visual bugs	
+ * Sensible serial output for key events or stages
+ * Reasonable use of multiple fibers - fibers make sense
+ * Design is independent of Python version
+ * Reasonable display update rate - makes it playable
+ * most code is high quality
+ * Useful README file
+ * Code is well commented
+
+Excellent
+ * some attempt to innovate - gameplay extensions, user defined events
+ * Code is well designed to be responsive
+ * Good use of fibers, events, and other microbit api features
+ * no obvious memory leaks
+ * good practices, including defining constants
+ * no obvious errors such as null pointers
+ * consistently high quality code
+
+
+Code quality assessed on:
+ * code should follow C idiom, NOT python.
+ * readable code with consistent indentation
+ * Appropriately structured and code split conceptually
+ * Use of local variables where possible and globals where required
+ * Defining constants where appropriate
+ * Appropriate naming variables following C conventions
