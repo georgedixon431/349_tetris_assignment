@@ -21,9 +21,17 @@ Blocks cannot move through the sides, bottom, or other blocks.
 ## Scoring
 
 Points are awarded when blocks land and when lines are cleared.
-
+- when a block lands = 1 point for each pixel in the block (eg block with 3 pixels = 3 points)
 - One cleared line = 10 points
 - Two lines cleared together = 40 points
+
+The current points multiplier also applies to these scores.
+
+## Tetris Event
+
+Clearing two lines at the same time creates a user-defined Tetris event.
+
+The Tetris event runs a short animation where the two completed lines disappear from the centre outwards. The game pauses while this animation is running.
 
 ## Accelerometer
 
@@ -31,12 +39,12 @@ The micro:bit accelerometer controls the difficulty.
 
 Tilting the micro:bit towards the player makes the blocks fall faster but also increases the points multiplier.
 
-| Tilt | Speed | Multiplier |
-|---|---:|---:|
-| Low | 500 ms | x1 |
-| Slight | 400 ms | x2 |
-| Medium | 300 ms | x3 |
-| Large | 200 ms | x4 |
+| Tilt   | Speed  | Multiplier |
+
+| Low    | 500 ms | x1         |
+| Slight | 400 ms | x2         |
+| Medium | 300 ms | x3         |
+| Large  | 200 ms | x4         |
 
 ## Fibers and Events
 
@@ -47,9 +55,18 @@ The program uses two fibers:
 
 Button presses are handled using micro:bit events.
 
+A user-defined Tetris event is generated when two lines are cleared at the same time. Its event handler controls the Tetris animation.
+
 ## Serial Output
 
-Serial messages are used for debugging and show events such as new blocks, landed blocks, cleared lines, speed changes and the final score.
+Serial messages are used for debugging and show events such as:
+
+- New blocks
+- Landed blocks
+- Cleared lines
+- Tetris
+- Falling speed changes
+- Final score
 
 ## Build
 

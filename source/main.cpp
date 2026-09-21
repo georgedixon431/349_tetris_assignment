@@ -9,45 +9,56 @@
 
 MicroBit uBit;
 
-// Game state and falling block variables
-bool gameOver = false;
-bool newblock = true;
-int blockX = 0;
-const int playableWidth = 4;
-const int blocks = 4;
-int fallingSpeed = 500;
-int currentSpeed = fallingSpeed;
-int blockY = 0;
-int dy = 1;
-int shape = 0;
-int score = 0;
-const int brightness = 255;
-const int fullRow = (255*5) + 2;
-std::array<std::array<int, 2>, 2> block;
+//tetris event
+const int TETRIS_ID = 1001;
+const int TETRIS_EVENT = 1;
+int tetrisRow1 = 0;
+int tetrisRow2 = 0;
+bool animation = false;
 
-int linesCleared  = 0;
-std::array<int, 4> landingPoints = {3, 3, 4, 2}; 
-const int LineClearPoints = 10;
-const int Tetris = 40;
-int pointsMultiplier = 1;
-int theta = 0;
-const int delay = 200;
-
-//initialises grid
-//7x7 grid provides a 5x5 playable area surrounded by hidden boundaries
+// Game constants
 const int ROWS = 7;
 const int COLS = 7;
+const int playableWidth = 4;
+const int blocks = 4;
+const int brightness = 255;
+const int fullRow = (brightness * 5) + 2;
+const int dy = 1;
+const int delay = 200;
+
+// Game state
+bool gameOver = false;
+bool newblock = true;
+int score = 0;
+int linesCleared = 0;
+
+// Current block
+int blockX = 0;
+int blockY = 0;
+int shape = 0;
+std::array<std::array<int, 2>, 2> block;
+
+// Scoring
+std::array<int, 4> landingPoints = {3, 3, 4, 2};
+int pointsMultiplier = 1;
+const int LineClearPoints = 10;
+const int Tetris = 40;
+
+// Difficulty and accelerometer
+int fallingSpeed = 500;
+int currentSpeed = fallingSpeed;
+int theta = 0;
+
+// 7x7 grid provides a 5x5 playable area surrounded by hidden boundaries
 std::vector<std::vector<int>> grid(ROWS, std::vector<int>(COLS, 0));
 
-//initialises different blocks
-//255 represents an occupied LED position and 0 represents an empty position
+// Different block shapes
 std::array<std::array<std::array<int, 2>, 2>, 4> data = {{
     {{{brightness, brightness}, {brightness, 0}}},
     {{{brightness, brightness}, {0, brightness}}},
     {{{brightness, brightness}, {brightness, brightness}}},
     {{{brightness, brightness}, {0, 0}}}
 }};
-
 //Creates hidden side walls and floor around the 5x5 playable grid
 void initialiseGrid()
 {
@@ -73,22 +84,31 @@ void clearLine(){
         }
         //A complete row contains five blocks plus the two boundary cells
         if (sum == fullRow){ 
-            linesCleared++;
-            //Shift all rows above the completed row down by one
-            for (int j = y; j > 0; --j) {
-                grid[j] = grid[j - 1];
+            if (linesCleared == 0){
+                tetrisRow1 = y;
+            } else{
+                tetrisRow2 = y;
             }
-            //Reset the top row while keeping the side boundaries
-            grid[0] = {1, 0, 0, 0, 0, 0, 1};
+            linesCleared++;
         }
     }
+
     //if 2 lines cleared at once counts as tetris so is double points
     if (linesCleared == 2){
         score += Tetris * pointsMultiplier;
-        uBit.serial.send("Tetris - score:" + ManagedString(score) + "\r\n");
+        uBit.serial.send("TETRIS! - score:" + ManagedString(score) + "\r\n");
+        animation = true;
+        MicroBitEvent(TETRIS_ID, TETRIS_EVENT);
     } else if (linesCleared == 1){
         score += LineClearPoints * pointsMultiplier;
         uBit.serial.send("One Line cleared - score:" + ManagedString(score) + "\r\n");
+
+        //Shift all rows above the completed row down by one
+        for (int j = tetrisRow1; j > 0; --j) {
+            grid[j] = grid[j - 1];
+        }
+        //Reset the top row while keeping the side boundaries
+        grid[0] = {1, 0, 0, 0, 0, 0, 1};
     }
 }
 
@@ -171,10 +191,10 @@ bool canRotate() {
 
     //Rotate a temporary copy to determine which new cells would become occupied
     int spare = rotated[0][0];
-    rotated[0][0] = rotated[0][1];
-    rotated[0][1] = rotated[1][1];
-    rotated[1][1] = rotated[1][0];
-    rotated[1][0] = spare;
+    rotated[0][0] = rotated[1][0];
+    rotated[1][0] = rotated[1][1];
+    rotated[1][1] = rotated[0][1];
+    rotated[0][1] = spare;
 
     for (int row = 0; row < 2; ++row) {
         for (int col = 0; col < 2; ++col) {
@@ -251,10 +271,41 @@ void onButtonB(MicroBitEvent e)
     }
 }
 
+//creates animation when user gets a tetris (wipes 2 lines at same time)
+void onTetris(MicroBitEvent e)
+{
+    //Remove middle block from both rows
+    grid[tetrisRow1][3] = 0;
+    grid[tetrisRow2][3] = 0;
+    displaygrid();
+    uBit.sleep(300);
+
+    //Remove blocks either side of the middle
+    grid[tetrisRow1][2] = 0;
+    grid[tetrisRow1][4] = 0;
+    grid[tetrisRow2][2] = 0;
+    grid[tetrisRow2][4] = 0;
+    displaygrid();
+    uBit.sleep(300);
+
+    //Remove the final outside blocks
+    grid[tetrisRow1][1] = 0;
+    grid[tetrisRow1][5] = 0;
+    grid[tetrisRow2][1] = 0;
+    grid[tetrisRow2][5] = 0;
+    displaygrid();
+    uBit.sleep(300);
+    animation = false;
+}
+
 //Main gameplay fiber responsible for creating and automatically dropping blocks
 void fallingblocks(){
 
     while (!gameOver){
+        //make the tetris animation blocking
+        while (animation){
+            uBit.sleep(50);
+        }
         //Generate a new random block at a random valid horizontal position
         if (newblock){
             newblock = false;
@@ -353,6 +404,12 @@ int main()
         MICROBIT_ID_BUTTON_B,
         MICROBIT_BUTTON_EVT_CLICK,
         onButtonB
+    );
+
+    uBit.messageBus.listen(
+        TETRIS_ID,
+        TETRIS_EVENT,
+        onTetris
     );
 
     //Run automatic block falling independently from button event handlers
