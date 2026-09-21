@@ -234,7 +234,7 @@ void displaygrid(){
 //A+B event handler rotates the current block if the rotation is valid
 void onButtonAB(MicroBitEvent e)
 {
-    if (!gameOver && canRotate()){
+    if (!gameOver && canRotate() && !animation){
         removeBlock();
         //Rotate the current 2x2 block
         int spare = block[0][0];
@@ -250,7 +250,7 @@ void onButtonAB(MicroBitEvent e)
 //Button A event handler moves the current block left if there is space
 void onButtonA(MicroBitEvent e)
 {
-    if (!gameOver && canMoveLeft())
+    if (!gameOver && canMoveLeft() && !animation)
     {
         removeBlock();
         blockX--;
@@ -262,7 +262,7 @@ void onButtonA(MicroBitEvent e)
 //Button B event handler moves the current block right if there is space
 void onButtonB(MicroBitEvent e)
 {
-    if (!gameOver && canMoveRight())
+    if (!gameOver && canMoveRight() && !animation)
     {
         removeBlock();
         blockX++;
@@ -295,6 +295,17 @@ void onTetris(MicroBitEvent e)
     grid[tetrisRow2][5] = 0;
     displaygrid();
     uBit.sleep(300);
+
+        //Move all rows above the cleared rows down by two
+    for (int y = tetrisRow2; y > 1; --y){
+        grid[y] = grid[y - 2];
+    }
+
+    //Reset the top two rows while keeping the side boundaries
+    grid[0] = {1, 0, 0, 0, 0, 0, 1};
+    grid[1] = {1, 0, 0, 0, 0, 0, 1};
+
+    displaygrid();
     animation = false;
 }
 
