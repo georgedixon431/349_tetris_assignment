@@ -1,4 +1,8 @@
 //arm-none-eabi-objcopy -O ihex build/MICROBIT build/MICROBIT.hex
+// git add .
+// git commit -m ""
+// git push
+
 #include <vector>
 #include <array>
 #include "MicroBit.h"
@@ -14,6 +18,7 @@ int fallingSpeed = 500;
 int blockY = 0;
 int dy = 1;
 int shape = 0;
+int score = 0;
 std::array<std::array<int, 2>, 2> block;
 
 
@@ -44,20 +49,59 @@ void initialiseGrid()
     }
 }
 
-void removeBlock()
-{
-    grid[blockY][blockX] = 0;
-    grid[blockY][blockX + 1] = 0;
-    grid[blockY + 1][blockX] = 0;
-    grid[blockY + 1][blockX + 1] = 0;
+void clearLine(){
+    for (int y = 0; y < COLS; ++y) {
+        int sum = 0;
+        for (int x = 0; x < ROWS; ++x){
+            sum += grid[y][x];
+        }
+        if (sum == 47){ //9 * 5 = 45 for full row + 2 for edges
+            for (int j = y; j > 0; --j) {
+                grid[j] = grid[j - 1];
+            }
+            grid[0] = {1, 0, 0, 0, 0, 0, 1};
+        }
+    }
 }
 
-void placeBlock()
+void removeBlock()
 {
-    grid[blockY][blockX]         = block[0][0];
-    grid[blockY][blockX + 1]     = block[0][1];
-    grid[blockY + 1][blockX]     = block[1][0];
-    grid[blockY + 1][blockX + 1] = block[1][1];
+    if (block[0][0] > 0)
+        grid[blockY][blockX] = 0;
+    if (block[0][1] > 0)
+        grid[blockY][blockX + 1]     = 0;
+    if (block[1][0] > 0)
+        grid[blockY + 1][blockX]     = 0;
+    if (block[1][1]>0)
+        grid[blockY + 1][blockX + 1] = 0;
+}
+
+bool canMoveDown()
+{
+    for (int row = 0; row < 2; row++){
+        for (int col = 0; col < 2; col++){
+            if (block[row][col] > 0){
+                int nextY = blockY + row + 1;
+                int nextX = blockX + col;
+                if (grid[nextY][nextX] > 0)
+                {
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
+}
+
+void setBlock(){
+    if (block[0][0] > 0)
+        grid[blockY][blockX] = block[0][0];
+    if (block[0][1] > 0)
+        grid[blockY][blockX + 1]     = block[0][1];
+    if (block[1][0] > 0)
+        grid[blockY + 1][blockX]     = block[1][0];
+    if (block[1][1]>0)
+        grid[blockY + 1][blockX + 1] = block[1][1];
 }
 
 void displaygrid(){
@@ -70,13 +114,25 @@ void displaygrid(){
         }
 }
 
+void onButtonAB(MicroBitEvent e)
+{
+    removeBlock();
+    int spare = block[0][0];
+    block[0][0] = block[1][0];
+    block[1][0] = block[1][1];
+    block[1][1] = block[0][1];
+    block[0][1] = spare;
+    setBlock();
+    displaygrid();
+}
+
 void onButtonA(MicroBitEvent e)
 {
     if (!gameOver && blockX> 1)
     {
         removeBlock();
         blockX--;
-        placeBlock();
+        setBlock();
         displaygrid();
     }
 }
@@ -87,7 +143,7 @@ void onButtonB(MicroBitEvent e)
     {
         removeBlock();
         blockX++;
-        placeBlock();
+        setBlock();
         displaygrid();
     }
 }
@@ -101,16 +157,15 @@ void fallingblocks(){
             blockX = microbit_random(range) + 1;
             shape = microbit_random(blocks);
             block = data[shape];
-        }
-        else{
+        } else if(canMoveDown()){
             blockY += dy;
-        }
-        if (blockY >= 5){
+        } else{
                 newblock = true;
+                setBlock();
+                clearLine();
                 continue;
             }
-
-        placeBlock();
+        setBlock();
         displaygrid();
         uBit.sleep(fallingSpeed);
         removeBlock();
@@ -121,6 +176,12 @@ int main()
 {
     uBit.init();
     initialiseGrid();
+
+    uBit.messageBus.listen(
+        MICROBIT_ID_BUTTON_AB,
+        MICROBIT_BUTTON_EVT_CLICK,
+        onButtonAB
+    );
 
     uBit.messageBus.listen(
         MICROBIT_ID_BUTTON_A,
@@ -135,5 +196,6 @@ int main()
     );
 
     create_fiber(fallingblocks);
+    create_fiber(clearLine);
     release_fiber();
 }
