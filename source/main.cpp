@@ -9,32 +9,46 @@
 
 MicroBit uBit;
 
+// Game state and falling block variables
 bool gameOver = false;
 bool newblock = true;
 int blockX = 0;
-int range = 4;
-int blocks = 4;
+const int playableWidth = 4;
+const int blocks = 4;
 int fallingSpeed = 500;
+int currentSpeed = fallingSpeed;
 int blockY = 0;
 int dy = 1;
 int shape = 0;
 int score = 0;
+const int brightness = 255;
+const int fullRow = (255*5) + 2;
 std::array<std::array<int, 2>, 2> block;
 
+int linesCleared  = 0;
+std::array<int, 4> landingPoints = {3, 3, 4, 2}; 
+const int LineClearPoints = 10;
+const int Tetris = 40;
+int pointsMultiplier = 1;
+int theta = 0;
+const int delay = 200;
 
 //initialises grid
+//7x7 grid provides a 5x5 playable area surrounded by hidden boundaries
 const int ROWS = 7;
 const int COLS = 7;
 std::vector<std::vector<int>> grid(ROWS, std::vector<int>(COLS, 0));
 
 //initialises different blocks
+//255 represents an occupied LED position and 0 represents an empty position
 std::array<std::array<std::array<int, 2>, 2>, 4> data = {{
-    {{{9, 9}, {9, 0}}},
-    {{{9, 9}, {0, 9}}},
-    {{{9, 9}, {9, 9}}},
-    {{{9, 9}, {0, 0}}}
+    {{{brightness, brightness}, {brightness, 0}}},
+    {{{brightness, brightness}, {0, brightness}}},
+    {{{brightness, brightness}, {brightness, brightness}}},
+    {{{brightness, brightness}, {0, 0}}}
 }};
 
+//Creates hidden side walls and floor around the 5x5 playable grid
 void initialiseGrid()
 {
     for (int x = 0; x < COLS; ++x)
@@ -49,22 +63,36 @@ void initialiseGrid()
     }
 }
 
+//Checks for completed rows, updates the score and moves rows above down
 void clearLine(){
+    linesCleared = 0;
     for (int y = 0; y < COLS; ++y) {
         int sum = 0;
         for (int x = 0; x < ROWS; ++x){
             sum += grid[y][x];
         }
-        if (sum == 47){ //9 * 5 = 45 for full row + 2 for edges
-            score += 10;
+        //A complete row contains five blocks plus the two boundary cells
+        if (sum == fullRow){ 
+            linesCleared++;
+            //Shift all rows above the completed row down by one
             for (int j = y; j > 0; --j) {
                 grid[j] = grid[j - 1];
             }
+            //Reset the top row while keeping the side boundaries
             grid[0] = {1, 0, 0, 0, 0, 0, 1};
         }
     }
+    //if 2 lines cleared at once counts as tetris so is double points
+    if (linesCleared == 2){
+        score += Tetris * pointsMultiplier;
+        uBit.serial.send("Tetris - score:" + ManagedString(score) + "\r\n");
+    } else if (linesCleared == 1){
+        score += LineClearPoints * pointsMultiplier;
+        uBit.serial.send("One Line cleared - score:" + ManagedString(score) + "\r\n");
+    }
 }
 
+//Removes only the occupied cells of the current falling block from the grid
 void removeBlock()
 {
     if (block[0][0] > 0)
@@ -77,6 +105,23 @@ void removeBlock()
         grid[blockY + 1][blockX + 1] = 0;
 }
 
+//Checks whether a newly generated block can be placed without overlapping another block
+bool canPlaceBlock()
+{
+    for (int row = 0; row < 2; row++){
+        for (int col = 0; col < 2; col++){
+            if (block[row][col] > 0){
+                if (grid[blockY + row][blockX + col] > 0)
+                {
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
+}
+
+//Checks whether every occupied cell of the block can move down one row
 bool canMoveDown()
 {
     for (int row = 0; row < 2; row++){
@@ -94,6 +139,7 @@ bool canMoveDown()
     return true;
 }
 
+//Checks the left edge of the block for the wall or another block
 bool canMoveLeft(){
     if (blockX <= 1){
         return false;
@@ -106,6 +152,7 @@ bool canMoveLeft(){
     return true;
 }
 
+//Checks the right edge of the block for the wall or another block
 bool canMoveRight(){
     if (blockX >= 4){
         return false;
@@ -117,9 +164,12 @@ bool canMoveRight(){
     }
     return true;
 }
+
+//Creates the rotated block and checks whether rotation would cause a collision
 bool canRotate() {
     std::array<std::array<int, 2>, 2> rotated = block;
 
+    //Rotate a temporary copy to determine which new cells would become occupied
     int spare = rotated[0][0];
     rotated[0][0] = rotated[0][1];
     rotated[0][1] = rotated[1][1];
@@ -128,7 +178,9 @@ bool canRotate() {
 
     for (int row = 0; row < 2; ++row) {
         for (int col = 0; col < 2; ++col) {
+            //Only check cells that will become occupied after rotation
             if (rotated[row][col] > 0 && block[row][col] == 0 && grid[blockY + row][blockX + col]) {
+                uBit.serial.send("Rotation blocked\r\n");
                 return false;
             }
         }
@@ -136,6 +188,7 @@ bool canRotate() {
     return true;
 }
 
+//Places only the occupied cells of the current block into the grid
 void setBlock(){
     if (block[0][0] > 0)
         grid[blockY][blockX] = block[0][0];
@@ -147,20 +200,23 @@ void setBlock(){
         grid[blockY + 1][blockX + 1] = block[1][1];
 }
 
+//Maps the internal 5x5 playable area onto the micro:bit LED display
 void displaygrid(){
     for (int x = 0; x < ROWS; ++x) {
             for (int y = 0; y < COLS; ++y) {
                 if (x > 0 && y > 0 && x < 6 && y < 6){
-                uBit.display.image.setPixelValue(x - 1, y - 1, grid[y][x] * 28); //255/9 = 28.3333 else 0*28.3 = 0
+                uBit.display.image.setPixelValue(x - 1, y - 1, grid[y][x]); 
                 }
             }
         }
 }
 
+//A+B event handler rotates the current block if the rotation is valid
 void onButtonAB(MicroBitEvent e)
 {
     if (!gameOver && canRotate()){
         removeBlock();
+        //Rotate the current 2x2 block
         int spare = block[0][0];
         block[0][0] = block[1][0];
         block[1][0] = block[1][1];
@@ -171,6 +227,7 @@ void onButtonAB(MicroBitEvent e)
     }
 }
 
+//Button A event handler moves the current block left if there is space
 void onButtonA(MicroBitEvent e)
 {
     if (!gameOver && canMoveLeft())
@@ -182,6 +239,7 @@ void onButtonA(MicroBitEvent e)
     }
 }
 
+//Button B event handler moves the current block right if there is space
 void onButtonB(MicroBitEvent e)
 {
     if (!gameOver && canMoveRight())
@@ -193,32 +251,44 @@ void onButtonB(MicroBitEvent e)
     }
 }
 
+//Main gameplay fiber responsible for creating and automatically dropping blocks
 void fallingblocks(){
 
     while (!gameOver){
+        //Generate a new random block at a random valid horizontal position
         if (newblock){
             newblock = false;
             blockY = 0;
-            blockX = microbit_random(range) + 1;
+            blockX = microbit_random(playableWidth) + 1;
             shape = microbit_random(blocks);
             block = data[shape];
-            if (!canMoveDown()){
+            //Game ends if the new block overlaps blocks already at the top
+            if (!canPlaceBlock()){
                 gameOver = true;
                 break;
             }
+            uBit.serial.send("New block at x = " + ManagedString(blockX) + "\r\n");
         } else if(canMoveDown()){
+            //Move the current block down one row
             blockY += dy;
         } else{
+                //Block cannot move further, so leave it in place and check for completed lines
                 newblock = true;
+                uBit.serial.send("block Landed\r\n");
+                score += landingPoints[shape] * pointsMultiplier;
                 setBlock();
                 clearLine();
                 continue;
             }
+        //Display the current position before waiting for the next falling step
         setBlock();
         displaygrid();
         uBit.sleep(fallingSpeed);
+        //Temporarily remove the falling block so collision checks use the fixed grid
         removeBlock();
     }
+
+    //Output final score over serial and show the result on the LED display
     uBit.serial.send("Final score: ");
     uBit.serial.send(ManagedString(score));
     uBit.serial.send("\r\n");
@@ -227,33 +297,66 @@ void fallingblocks(){
     uBit.display.scroll("LOSER! Score: " + ManagedString(score));
     
 
+    //Restart the micro:bit after displaying the final score
     uBit.reset();
+}
+
+void tiltControl(){
+    while(!gameOver){
+        currentSpeed = fallingSpeed;
+        //gets the angle of the microBit and uses it to determine the falling speed of the blocks
+        //faster speed means more points
+        theta = uBit.accelerometer.getY();
+        if (theta >= 750){
+            fallingSpeed = 200;
+            pointsMultiplier = 4;
+        } else if (theta >= 500){
+            fallingSpeed = 300;
+            pointsMultiplier = 3;
+        } else if (theta >= 250){
+            fallingSpeed = 400;
+            pointsMultiplier = 2;
+        } else{
+            fallingSpeed = 500;
+            pointsMultiplier = 1;
+        }
+        //only prints the falling speed serial port if change in speed
+        if (currentSpeed != fallingSpeed){
+            uBit.serial.send("falling speed changed to: " + ManagedString(fallingSpeed) + "\r\n");
+        }
+        uBit.sleep(delay);
+    }
 }
 
 int main()
 {
+    //Initialise the micro:bit runtime and game grid
     uBit.init();
     initialiseGrid();
 
+    //Register A+B event for block rotation
     uBit.messageBus.listen(
         MICROBIT_ID_BUTTON_AB,
         MICROBIT_BUTTON_EVT_CLICK,
         onButtonAB
     );
 
+    //Register button A event for left movement
     uBit.messageBus.listen(
         MICROBIT_ID_BUTTON_A,
         MICROBIT_BUTTON_EVT_CLICK,
         onButtonA
     );
 
+    //Register button B event for right movement
     uBit.messageBus.listen(
         MICROBIT_ID_BUTTON_B,
         MICROBIT_BUTTON_EVT_CLICK,
         onButtonB
     );
 
+    //Run automatic block falling independently from button event handlers
     create_fiber(fallingblocks);
-    create_fiber(clearLine);
+    create_fiber(tiltControl);
     release_fiber();
 }
